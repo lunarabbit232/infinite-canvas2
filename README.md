@@ -5,7 +5,7 @@
 <h1 align="center">无限画布 (infinite-canvas)</h1>
 
 <p align="center">
-  <a href="https://github.com/tigerowo/infinite-canvas"><img src="https://img.shields.io/github/stars/tigerowo/infinite-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
+  <a href="https://github.com/lunarabbit232/infinite-canvas2"><img src="https://img.shields.io/github/stars/lunarabbit232/infinite-canvas2?style=flat-square&logo=github" alt="GitHub stars"></a>
   <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.3.0-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-ready-2496ed?style=flat-square&logo=docker&logoColor=white" alt="Docker ready"></a>
@@ -53,29 +53,24 @@ APIMart 点此链接 [https://apimart.ai/register?aff=fWMrEv](https://apimart.ai
 ## 快速开始
 
 ```bash
-git clone https://github.com/tigerowo/infinite-canvas.git
+git clone https://github.com/lunarabbit232/infinite-canvas2.git
 cd infinite-canvas
 cp .env.example .env
 # 修改默认账号密码等信息
-docker compose up -d --build
 ```
 
-本地非 Docker 开发运行：
-```bash
-cp .env.example .env
-go run .
+启动后端（Go）：
 
-# 另开一个终端窗口
+```bash
+go run .
+```
+
+另开一个终端，启动前端（Next.js）：
+
+```bash
 cd web
 npm install
 npm run dev
-```
-
-本地源码构建运行：
-
-```bash
-cp .env.example .env
-docker compose -f docker-compose.local.yml up -d --build
 ```
 
 运行后默认端口3000，可访问 `http://localhost:3000`
@@ -158,10 +153,10 @@ https://infinite-canvas-cpco.onrender.com?apiKey={key}&baseUrl={address}
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=tigerowo%2Finfinite-canvas&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=lunarabbit232%2Finfinite-canvas2&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=tigerowo/infinite-canvas&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=tigerowo/infinite-canvas&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=tigerowo/infinite-canvas&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=lunarabbit232/infinite-canvas2&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=lunarabbit232/infinite-canvas2&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=lunarabbit232/infinite-canvas2&type=date&legend=top-left" />
  </picture>
 </a>
