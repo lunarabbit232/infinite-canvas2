@@ -1,0 +1,400 @@
+"use client";
+
+import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
+import { ProTable, type ProColumns } from "@ant-design/pro-components";
+import { App, Button, Card, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { useEffect, useState, useRef, type ChangeEvent } from "react";
+
+import { uploadImage } from "@/services/image-storage";
+import { uploadMediaFile } from "@/services/file-storage";
+import { useCopyText } from "@/hooks/use-copy-text";
+import type { AdminAsset } from "@/services/api/admin";
+import { useAdminAssets } from "./use-admin-assets";
+import { AssetPromptBindModal } from "./components/asset-prompt-bind-modal";
+
+type AssetFormValues = Partial<AdminAsset> & { tagText?: string };
+
+const typeOptions = [
+    { label: "全部类型", value: "" },
+    { label: "文本", value: "text" },
+    { label: "图片", value: "image" },
+    { label: "视频", value: "video" },
+    { label: "音频", value: "audio" },
+];
+
+const editTypeOptions = typeOptions.slice(1);
+
+const usageOptions = [
+    { label: "未指定", value: "" },
+    { label: "剧本", value: "剧本" },
+    { label: "配音", value: "配音" },
+    { label: "参考图", value: "参考图" },
+    { label: "音效", value: "音效" },
+];
+
+const styleOptions = [
+    { label: "未指定", value: "" },
+    { label: "写实", value: "写实" },
+    { label: "二次元", value: "二次元" },
+    { label: "赛博朋克", value: "赛博朋克" },
+    { label: "水墨", value: "水墨" },
+    { label: "油画", value: "油画" },
+];
+
+const sourceOptions = [
+    { label: "未指定", value: "" },
+    { label: "自上传", value: "自上传" },
+    { label: "模板库", value: "模板库" },
+    { label: "社区", value: "社区" },
+];
+
+export default function AdminAssetsPage() {
+    const { assets, tags, keyword, kind, tag, page, pageSize, total, isLoading, searchAssets, changeKind, changeTag, changePage, changePageSize, resetFilters, refreshAssets, saveAsset: saveAdminAsset, deleteAsset } = useAdminAssets();
+    const copyText = useCopyText();
+    const [form] = Form.useForm<AssetFormValues>();
+    const [keywordText, setKeywordText] = useState(keyword);
+    const [editingAsset, setEditingAsset] = useState<Partial<AdminAsset> | null>(null);
+    const [detailAsset, setDetailAsset] = useState<AdminAsset | null>(null);
+    const [deletingAsset, setDeletingAsset] = useState<AdminAsset | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [promptBindAsset, setPromptBindAsset] = useState<AdminAsset | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { message } = App.useApp();
+    const formType = Form.useWatch("type", form) || editingAsset?.type || "text";
+    const tagOptions = tags.map((item) => ({ label: item, value: item }));
+
+    useEffect(() => {
+        if (!editingAsset) return;
+        form.setFieldsValue({
+            type: "text",
+            title: "",
+            coverUrl: "",
+            category: "",
+            description: "",
+            content: "",
+            url: "",
+            usage: "",
+            style: "",
+            source: "",
+            ...editingAsset,
+            tagText: editingAsset.tags?.join(", ") || "",
+        });
+    }, [editingAsset, form]);
+
+    useEffect(() => setKeywordText(keyword), [keyword]);
+
+    const saveAsset = async () => {
+        const value = await form.validateFields();
+        const nextType = value.type || "text";
+        await saveAdminAsset({
+            ...editingAsset,
+            ...value,
+            type: nextType,
+            coverUrl: value.coverUrl || (nextType === "image" ? value.url : ""),
+            tags: (value.tagText || "")
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean),
+        });
+        setEditingAsset(null);
+    };
+
+    const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        setUploading(true);
+        let succeeded = 0;
+        for (const file of files) {
+            try {
+                const isImage = file.type.startsWith("image/");
+                const isVideo = file.type.startsWith("video/");
+                const isAudio = file.type.startsWith("audio/");
+                const mimeType = file.type || (isImage ? "image/png" : isVideo ? "video/mp4" : "audio/mpeg");
+                const type = isImage ? "image" : isVideo ? "video" : "audio";
+
+                let url = "", storageKey = "", width = 0, height = 0, bytes = file.size;
+                try {
+                    if (isImage) {
+                        const uploaded = await uploadImage(file);
+                        url = uploaded.url; storageKey = uploaded.storageKey;
+                        width = uploaded.width; height = uploaded.height; bytes = uploaded.bytes;
+                    } else {
+                        const uploaded = await uploadMediaFile(file);
+                        url = uploaded.url; storageKey = uploaded.storageKey;
+                        width = uploaded.width || 0; height = uploaded.height || 0; bytes = uploaded.bytes;
+                    }
+                } catch {
+                    // continue without upload — store metadata only
+                }
+                await saveAdminAsset({
+                    type: type as AdminAsset["type"],
+                    title: file.name.replace(/\.[^.]+$/, ""),
+                    url, coverUrl: url, tags: [], category: "",
+                    description: "", content: "", usage: "", style: "", source: "",
+                    mimeType, fileSize: bytes, width, height,
+                });
+                succeeded++;
+            } catch {
+                message.error(`导入 ${file.name} 失败`);
+            }
+        }
+        setUploading(false);
+        message.success(`成功导入 ${succeeded}/${files.length} 个文件`);
+        // reset input so same files can be re-selected
+        e.target.value = "";
+    };
+
+    const columns: ProColumns<AdminAsset>[] = [
+        {
+            title: "封面",
+            dataIndex: "coverUrl",
+            width: 88,
+            render: (_, item) => <Image src={item.coverUrl || item.url || "/logo.svg"} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/logo.svg" />,
+        },
+        {
+            title: "标题",
+            dataIndex: "title",
+            width: 260,
+            render: (_, item) => (
+                <Typography.Link strong ellipsis style={{ maxWidth: 260, display: "block" }} onClick={() => setDetailAsset(item)}>
+                    {item.title}
+                </Typography.Link>
+            ),
+        },
+        {
+            title: "类型",
+            dataIndex: "type",
+            width: 84,
+            render: (_, item) => <Tag>{assetTypeLabel(item.type)}</Tag>,
+        },
+        {
+            title: "标签",
+            dataIndex: "tags",
+            width: 180,
+            render: (_, item) => (
+                <Space size={[4, 4]} wrap>
+                    {(item.tags || []).slice(0, 3).map((tag) => (
+                        <Tag key={tag}>{tag}</Tag>
+                    ))}
+                </Space>
+            ),
+        },
+        {
+            title: "分类",
+            dataIndex: "category",
+            width: 120,
+            render: (_, item) => <Typography.Text type="secondary">{item.category || "未标注"}</Typography.Text>,
+        },
+        {
+            title: "操作",
+            key: "actions",
+            width: 112,
+            align: "right",
+            render: (_, item) => (
+                <Space size={4}>
+                    <Tooltip title="详情">
+                        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => setDetailAsset(item)} />
+                    </Tooltip>
+                    <Tooltip title="编辑">
+                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingAsset(item)} />
+                    </Tooltip>
+                    <Tooltip title="删除">
+                        <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={() => setDeletingAsset(item)} />
+                    </Tooltip>
+                    <Tooltip title="关联提示词">
+                        <Button type="text" size="small" icon={<LinkOutlined />} onClick={() => setPromptBindAsset(item)} />
+                    </Tooltip>
+                </Space>
+            ),
+        },
+    ];
+
+    return (
+        <main style={{ padding: 24 }}>
+            <Flex vertical gap={16}>
+                <Card variant="borderless">
+                    <Form layout="vertical">
+                        <Row gutter={16} align="bottom">
+                            <Col flex="360px">
+                                <Form.Item label="关键词">
+                                    <Input.Search value={keywordText} placeholder="搜索标题、内容或标签" allowClear enterButton={<SearchOutlined />} onSearch={() => searchAssets(keywordText)} onChange={(event) => setKeywordText(event.target.value)} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="180px">
+                                <Form.Item label="类型">
+                                    <Select value={kind} onChange={changeKind} options={typeOptions} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="220px">
+                                <Form.Item label="标签">
+                                    <Select mode="multiple" allowClear maxTagCount="responsive" value={tag} onChange={changeTag} options={tagOptions} placeholder="全部标签" />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="none">
+                                <Form.Item>
+                                    <Space>
+                                        <Button
+                                            onClick={() => {
+                                                setKeywordText("");
+                                                resetFilters();
+                                            }}
+                                        >
+                                            重置
+                                        </Button>
+                                        <Button type="primary" icon={<ReloadOutlined />} onClick={() => searchAssets(keywordText)}>
+                                            查询
+                                        </Button>
+                                    </Space>
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </Form>
+                </Card>
+                <ProTable<AdminAsset>
+                    rowKey="id"
+                    columns={columns}
+                    dataSource={assets}
+                    loading={isLoading}
+                    search={false}
+                    defaultSize="middle"
+                    tableLayout="fixed"
+                    cardProps={{ variant: "borderless" }}
+                    headerTitle={
+                        <Space>
+                            <Typography.Text strong>素材列表</Typography.Text>
+                            <Tag>{total} 条</Tag>
+                        </Space>
+                    }
+                    options={{ density: true, setting: true, reload: () => void refreshAssets() }}
+                    toolBarRender={() => [
+                        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingAsset({ type: "text", tags: [] })}>
+                            新增
+                        </Button>,
+                        <Button key="batch" icon={<UploadOutlined />} loading={uploading} onClick={() => fileInputRef.current?.click()}>
+                            批量导入
+                        </Button>,
+                    ]}
+                    pagination={{
+                        current: page,
+                        pageSize,
+                        total,
+                        showSizeChanger: true,
+                        pageSizeOptions: [10, 20, 50, 100],
+                        showTotal: (value) => `共 ${value} 条`,
+                        onChange: (nextPage, nextPageSize) => (nextPageSize !== pageSize ? changePageSize(nextPageSize) : changePage(nextPage)),
+                    }}
+                />
+            </Flex>
+
+            <Modal title={editingAsset?.id ? "编辑素材" : "新增素材"} open={Boolean(editingAsset)} width={760} onCancel={() => setEditingAsset(null)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
+                <Form form={form} layout="vertical" requiredMark={false}>
+                    <Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
+                        <Select options={editTypeOptions} />
+                    </Form.Item>
+                    <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="coverUrl" label="封面 URL">
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="tagText" label="标签，用逗号分隔">
+                        <Input />
+                    </Form.Item>
+                    <Row gutter={12}>
+                        <Col span={8}>
+                            <Form.Item name="usage" label="用途">
+                                <Select options={usageOptions} allowClear />
+                            </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                            <Form.Item name="style" label="风格">
+                                <Select options={styleOptions} allowClear />
+                            </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                            <Form.Item name="source" label="来源">
+                                <Select options={sourceOptions} allowClear />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="category" label="分类">
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="description" label="描述">
+                        <Input.TextArea rows={3} />
+                    </Form.Item>
+                    {formType === "image" || formType === "video" || formType === "audio" ? (
+                        <Form.Item name="url" label={formType === "image" ? "图片 URL" : formType === "video" ? "视频 URL" : "音频 URL"} rules={[{ required: true, message: formType === "image" ? "请输入图片 URL" : formType === "video" ? "请输入视频 URL" : "请输入音频 URL" }]}>
+                            <Input />
+                        </Form.Item>
+                    ) : (
+                        <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
+                            <Input.TextArea rows={6} />
+                        </Form.Item>
+                    )}
+                </Form>
+            </Modal>
+
+            <Modal title="素材详情" open={Boolean(detailAsset)} width={760} onCancel={() => setDetailAsset(null)} footer={<Button onClick={() => setDetailAsset(null)}>关闭</Button>}>
+                {detailAsset ? (
+                    <Flex vertical gap={14}>
+                        <Flex gap={14} align="start">
+                            <Image src={detailAsset.coverUrl || detailAsset.url || "/logo.svg"} alt={detailAsset.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/logo.svg" />
+                            <Flex vertical gap={8} style={{ minWidth: 0 }}>
+                                <Typography.Title level={5} style={{ margin: 0 }}>
+                                    {detailAsset.title}
+                                </Typography.Title>
+                                <Space wrap>
+                                    <Tag>{assetTypeLabel(detailAsset.type)}</Tag>
+                                    {detailAsset.category ? <Tag>{detailAsset.category}</Tag> : null}
+                                    {(detailAsset.tags || []).map((tag) => (
+                                        <Tag key={tag}>{tag}</Tag>
+                                    ))}
+                                </Space>
+                            </Flex>
+                        </Flex>
+                        {detailAsset.description ? (
+                            <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+                                {detailAsset.description}
+                            </Typography.Paragraph>
+                        ) : null}
+                        <Input.TextArea value={detailAsset.type === "text" ? detailAsset.content : detailAsset.url || detailAsset.coverUrl} rows={7} readOnly />
+                        <Button icon={<CopyOutlined />} onClick={() => copyText(detailAsset.type === "text" ? detailAsset.content : detailAsset.url || detailAsset.coverUrl)}>
+                            复制内容
+                        </Button>
+                    </Flex>
+                ) : null}
+            </Modal>
+
+            <Modal
+                title="删除素材"
+                open={Boolean(deletingAsset)}
+                onCancel={() => setDeletingAsset(null)}
+                onOk={async () => {
+                    if (!deletingAsset) return;
+                    await deleteAsset(deletingAsset.id);
+                    setDeletingAsset(null);
+                }}
+                okText="删除"
+                okButtonProps={{ danger: true }}
+                cancelText="取消"
+            >
+                确定删除「{deletingAsset?.title}」吗？删除后会从服务器素材库中移除。
+            </Modal>
+            <AssetPromptBindModal
+                assetId={promptBindAsset?.id || ""}
+                assetTitle={promptBindAsset?.title || ""}
+                open={Boolean(promptBindAsset)}
+                onClose={() => setPromptBindAsset(null)}
+            />
+            <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*" className="hidden" onChange={handleBulkUpload} />
+        </main>
+    );
+}
+
+function assetTypeLabel(type: AdminAsset["type"]) {
+    if (type === "image") return "图片";
+    if (type === "video") return "视频";
+    if (type === "audio") return "音频";
+    return "文本";
+}

@@ -1,0 +1,15 @@
+services:
+  app:
+    image: ghcr.io/tigerowo/infinite-canvas:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pull_policy: always
+    container_name: infinite-canvas
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
