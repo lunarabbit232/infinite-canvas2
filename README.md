@@ -149,6 +149,13 @@ https://infinite-canvas-cpco.onrender.com?apiKey={key}&baseUrl={address}
 
 本项目使用 GNU Affero General Public License v3.0，见 [LICENSE](LICENSE)。
 
+## 🙏 致谢 (Acknowledgments)
+
+本项目的开发受到了以下伟大项目的启发，在此表示由衷感谢：
+
+* **infinite-canvas（纯前端版）** by [@basketikun](https://github.com/basketikun)：其无限画布交互与节点编排的优雅实现，为本项目提供了核心思路与前端基础。
+* **infinite-canvas（生图增强版）**（[链接](https://github.com/HuFakai/infinite-canvas)）：本项目中 AI 生图增强与创作工作流的实现，参考了该项目的方法。
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=tigerowo%2Finfinite-canvas&type=date&legend=top-left">
