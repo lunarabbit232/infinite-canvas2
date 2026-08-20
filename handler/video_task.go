@@ -90,9 +90,10 @@ func proxyAIVideoTaskRequest(w http.ResponseWriter, r *http.Request) {
 		for i := range ids {
 			ids[i] = strings.TrimSpace(ids[i])
 		}
-		anchor, refs := service.BuildCharacterAnchor(user.ID, modelName, ids)
-		if anchor != "" || len(refs) > 0 {
-			body, contentType = injectCharacterData(body, contentType, anchor, refs)
+		seed := service.EnsureCharacterSeed(user.ID, ids[0])
+		anchor, refs := service.BuildCharacterAnchor(user.ID, modelName, ids, extractPromptFromBody(body))
+		if anchor != "" || len(refs) > 0 || seed > 0 {
+			body, contentType = injectCharacterData(body, contentType, anchor, refs, seed)
 		}
 	}
 	channel, userChannelID, err := selectAIRequestChannel(user, modelName, r.Header.Get("X-Model-Channel-ID"), r.Header.Get(userModelChannelHeader))
@@ -647,7 +648,7 @@ func ServeCachedVideo(w http.ResponseWriter, r *http.Request, taskID string) {
 	http.ServeFile(w, r, path)
 }
 
-func injectCharacterData(body []byte, contentType string, anchor string, refs []string) ([]byte, string) {
+func injectCharacterData(body []byte, contentType string, anchor string, refs []string, seed int64) ([]byte, string) {
 	if len(body) == 0 {
 		return body, contentType
 	}
@@ -669,6 +670,9 @@ func injectCharacterData(body []byte, contentType string, anchor string, refs []
 			if len(existing) > 0 {
 				m["images"] = existing
 			}
+		}
+		if seed > 0 {
+			m["seed"] = seed
 		}
 		if newBody, err := json.Marshal(m); err == nil {
 			return newBody, contentType

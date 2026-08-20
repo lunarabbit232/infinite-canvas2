@@ -394,7 +394,7 @@ func readCanvasTaskAIRequest(r *http.Request, fallbackEndpoint string) ([]byte, 
 		if len(charIDs) > 0 {
 			user, ok := service.UserFromContext(r.Context())
 			if ok {
-				if anchor, _ := service.BuildCharacterAnchor(user.ID, "", charIDs); anchor != "" {
+				if anchor, _ := service.BuildCharacterAnchor(user.ID, "", charIDs, meta["_canvas_prompt"]); anchor != "" {
 					body = injectMultipartPrompt(body, anchor)
 				}
 			}
@@ -661,8 +661,12 @@ func readCanvasTaskSources(r *http.Request) []string {
 }
 
 func injectCharacterAnchor(user model.AuthUser, body []byte, prompt string, modelName string, characterIDs []string) ([]byte, string) {
-	anchor, refs := service.BuildCharacterAnchor(user.ID, modelName, characterIDs)
-	if anchor == "" && len(refs) == 0 {
+	anchor, refs := service.BuildCharacterAnchor(user.ID, modelName, characterIDs, prompt)
+	var seed int64
+	if len(characterIDs) > 0 {
+		seed = service.EnsureCharacterSeed(user.ID, characterIDs[0])
+	}
+	if anchor == "" && len(refs) == 0 && seed == 0 {
 		return body, prompt
 	}
 	if len(body) > 0 && body[0] == '{' {
@@ -681,6 +685,9 @@ func injectCharacterAnchor(user model.AuthUser, body []byte, prompt string, mode
 				if len(existing) > 0 {
 					m["images"] = existing
 				}
+			}
+			if seed > 0 {
+				m["seed"] = seed
 			}
 			if newBody, err := json.Marshal(m); err == nil {
 				body = newBody

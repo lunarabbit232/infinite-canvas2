@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"strings"
 
@@ -72,7 +73,7 @@ func buildCharacterBase(name string, desc string, gender string, style string) s
 	return b.String()
 }
 
-func BuildCharacterAnchor(userID string, modelName string, characterIDs []string) (string, []string) {
+func BuildCharacterAnchor(userID string, modelName string, characterIDs []string, prompt string) (string, []string) {
 	if len(characterIDs) == 0 {
 		return "", nil
 	}
@@ -100,12 +101,7 @@ func BuildCharacterAnchor(userID string, modelName string, characterIDs []string
 			}
 			anchors = append(anchors, desc.String())
 		}
-		for _, u := range ch.ReferenceURLs {
-			u = strings.TrimSpace(u)
-			if u != "" {
-				refs = append(refs, u)
-			}
-		}
+		refs = append(refs, pickCharacterRefs(userID, id, prompt, ch.ReferenceURLs)...)
 	}
 	if len(anchors) == 0 {
 		return "", refs
@@ -126,6 +122,43 @@ func BuildCharacterAnchor(userID string, modelName string, characterIDs []string
 	}
 
 	return header + "\n\n", refs
+}
+
+// pickCharacterRefs 为角色选择要注入的参考图：单张或无 prompt 时原样返回全部；
+// 多张且 prompt 非空时，用 CLIP 选一张最贴合当前 prompt 的参考图，选图失败（CLIP
+// 服务不可用 / 下载失败）则退回全塞，保证生成不被阻塞。
+func pickCharacterRefs(userID string, characterID string, prompt string, referenceURLs []string) []string {
+	cleaned := make([]string, 0, len(referenceURLs))
+	for _, u := range referenceURLs {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			cleaned = append(cleaned, u)
+		}
+	}
+	if len(cleaned) <= 1 || strings.TrimSpace(prompt) == "" {
+		return cleaned
+	}
+	if best := PickBestCharacterRef(userID, characterID, prompt); best != "" {
+		return []string{best}
+	}
+	return cleaned
+}
+
+// EnsureCharacterSeed 返回角色的固定 seed：已锁定（>0）则直接返回，
+// 未锁定（=0）则随机生成一个并保存，实现「同角色复用同一 seed」。
+func EnsureCharacterSeed(userID string, characterID string) int64 {
+	ch, ok, _ := GetCharacter(userID, characterID)
+	if !ok {
+		return 0
+	}
+	if ch.Seed > 0 {
+		return ch.Seed
+	}
+	ch.Seed = rand.Int63n(2147483646) + 1 // 1 ~ 2^31-1 的正整数
+	if _, err := SaveCharacter(ch); err != nil {
+		return ch.Seed
+	}
+	return ch.Seed
 }
 
 func cosSim(a, b []float64) float64 {
@@ -178,10 +211,10 @@ func PickBestCharacterRef(userID string, characterID string, prompt string) stri
 
 	promptVec, err := repository.TextEmbedding([]string{prompt})
 	if err != nil || len(promptVec) == 0 {
-		return ch.ReferenceURLs[0]
+		return ""
 	}
 
-	bestURL := ch.ReferenceURLs[0]
+	bestURL := ""
 	bestScore := -1.0
 	for _, url := range ch.ReferenceURLs {
 		imgBytes, err := fetchImageBytes(url)

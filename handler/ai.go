@@ -127,9 +127,10 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		for i := range ids {
 			ids[i] = strings.TrimSpace(ids[i])
 		}
-		anchor, refs := service.BuildCharacterAnchor(user.ID, modelName, ids)
-		if anchor != "" || len(refs) > 0 {
-			body, contentType = injectCharacterData(body, contentType, anchor, refs)
+		seed := service.EnsureCharacterSeed(user.ID, ids[0])
+		anchor, refs := service.BuildCharacterAnchor(user.ID, modelName, ids, extractPromptFromBody(body))
+		if anchor != "" || len(refs) > 0 || seed > 0 {
+			body, contentType = injectCharacterData(body, contentType, anchor, refs, seed)
 		}
 	}
 	channel, userChannelID, err := selectAIRequestChannel(user, modelName, r.Header.Get("X-Model-Channel-ID"), r.Header.Get(userModelChannelHeader))
@@ -415,6 +416,20 @@ func looksLikeBase64(value string) bool {
 		}
 	}
 	return true
+}
+
+// extractPromptFromBody 从 AI 请求体 JSON 中提取 prompt 字段，用于角色参考图智能选图。
+// 解析失败或非 JSON 时返回空字符串（调用方按无 prompt 处理，退回全塞参考图）。
+func extractPromptFromBody(body []byte) string {
+	if len(body) == 0 || body[0] != '{' {
+		return ""
+	}
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return ""
+	}
+	prompt, _ := m["prompt"].(string)
+	return prompt
 }
 
 func readAIRequest(r *http.Request) ([]byte, string, string, error) {

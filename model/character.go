@@ -16,6 +16,7 @@ type Character struct {
 	CoverURL            string       `json:"coverUrl"`
 	ReferenceURLs       []string     `json:"referenceUrls" gorm:"serializer:json"`
 	PromptTemplate      string       `json:"promptTemplate"`
+	Seed                int64        `json:"seed,omitempty" gorm:"default:0"`
 	VoiceURL            string       `json:"voiceUrl"`
 	SceneURLs           []string     `json:"sceneUrls" gorm:"serializer:json"`
 	CreatedAt           string       `json:"createdAt"`
