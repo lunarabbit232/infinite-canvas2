@@ -26,7 +26,7 @@ import { deleteStoredMedia, downloadRemoteMedia, getVideoThumbnail, resolveMedia
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { deleteVideoGenerationLogs, fetchVideoGenerationLogs, saveVideoGenerationLogs } from "@/services/api/generation-logs";
 import { cancelVideoGenerationTask, createVideoGenerationTask, deleteVideoGenerationTask, listVideoGenerationTasks, pollVideoGenerationTaskStatus, VIDEO_POLL_INTERVAL_MS, VideoRequestError, type VideoResponse } from "@/services/api/video";
-import { fetchTTSVoices, synthesizeTTS, type TTSVoice } from "@/services/api/tts";
+import { listTTSVoices, synthesizeTTS, ttsVoiceShortName } from "@/services/api/tts";
 import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 import { isCanvasImageNodeType } from "@/app/(user)/canvas/utils/canvas-panorama";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -2163,21 +2163,20 @@ function TTSPanel() {
     const { message } = App.useApp();
     const token = useUserStore((state) => state.token);
     const [narration, setNarration] = useState("");
-    const [voice, setVoice] = useState("zh-CN-XiaoxiaoNeural");
-    const [voices, setVoices] = useState<TTSVoice[]>([]);
+    const [voice, setVoice] = useState(listTTSVoices()[0]?.id || "");
+    const [audioUrl, setAudioUrl] = useState("");
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        if (token) fetchTTSVoices(token).then(setVoices).catch(() => {});
-    }, [token]);
+    useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
     const handleGenerate = async () => {
         if (!narration.trim()) { message.error("请输入旁白文本"); return; }
         if (!token) { message.warning("请先登录"); return; }
         setLoading(true);
         try {
-            await synthesizeTTS(narration, voice, token);
-            message.success("配音已生成并下载");
+            const blob = await synthesizeTTS(narration, voice, token);
+            setAudioUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+            message.success("配音已生成，可试听或下载");
         } catch (err) {
             message.error(err instanceof Error ? err.message : "配音生成失败");
         } finally {
@@ -2190,11 +2189,17 @@ function TTSPanel() {
             <Input.TextArea value={narration} rows={2} placeholder="输入视频旁白文本，AI 自动配音..." onChange={(e) => setNarration(e.target.value)} />
             <div className="flex items-center gap-2">
                 <Select size="small" className="flex-1" value={voice} onChange={setVoice}
-                    options={voices.length ? voices.map((v) => ({ value: v.id, label: v.name })) : [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓（女，温柔）" }]} />
+                    options={listTTSVoices().map((v) => ({ value: v.id, label: v.name }))} />
                 <Button size="small" type="primary" icon={<Sparkles className="size-3.5" />} loading={loading} onClick={handleGenerate}>
                     生成配音
                 </Button>
             </div>
+            {audioUrl ? (
+                <div className="flex items-center gap-2">
+                    <audio controls src={audioUrl} className="h-8 flex-1" />
+                    <Button size="small" onClick={() => saveAs(audioUrl, `配音-${ttsVoiceShortName(voice)}.mp3`)}>下载</Button>
+                </div>
+            ) : null}
         </div>
     );
 }

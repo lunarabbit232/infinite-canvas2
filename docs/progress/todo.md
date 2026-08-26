@@ -58,6 +58,10 @@ description: 后续规划：视频创作一体化
 - [x] Qdrant 原生二进制安装 + 启动（已就绪：bin/qdrant v1.9.7，:6333）
 - [ ] 角色一致性：CLIP 参考图比对、生成结果校验（后端校验接口已接 2026-08-13：POST /api/v1/characters/consistency，前端调用按钮待接）
 - [ ] Agent 闭环步骤 2.5：执行词直接驱动画布运行（工作流引擎）
+- [ ] **内置免费 Edge TTS 已失效待修**：`service/tts.go` 用 HTTP POST 调微软 `speech.platform.bing.com/.../readaloud/edge/v1`，该端点已下线，实测恒返回 404（`/api/v1/tts/synthesize` 报「edge-tts returned status 404」）。微软现仅支持 WebSocket（wss://）+ `Sec-MS-GEC` 签名令牌。修复需引入 websocket 客户端依赖并实现 GEC 令牌生成。
+      另：内置声线列表中 `XiaohanNeural`、`XiaomengNeural`、`XiaomoNeural`、`XiaoqiuNeural` 微软已下线；现存 zh-CN 为 Xiaoxiao、Xiaoyi、Yunjian、Yunxi、Yunxia、Yunyang，另有方言音色 `zh-CN-liaoning-XiaobeiNeural`（东北）、`zh-CN-shaanxi-XiaoniNeural`（陕西）。
+      当前 TTS 走硅基流动 CosyVoice2 渠道路线（`/audio/speech`），此项为「恢复免费无 Key 路线」的可选增强。
+- [ ] `failAIChannelSelect`（handler/ai.go:39）白名单未含「没有可用模型渠道」，该错误被泛化成「AI 接口请求失败」，排查时易误判。建议把该消息加入白名单以透出真实原因。
 
 ## 优先级3：前端排版大改
 

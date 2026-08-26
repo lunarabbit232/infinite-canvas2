@@ -1,4 +1,19 @@
+const cosyVoice = "FunAudioLLM/CosyVoice2-0.5B";
+
+// 硅基流动 CosyVoice2 预置音色，voice 需带模型名前缀（模型名:音色名）
+export const cosyVoiceOptions = [
+    { value: `${cosyVoice}:alex`, label: "沉稳男声 · Alex（硅基流动）" },
+    { value: `${cosyVoice}:benjamin`, label: "低沉男声 · Benjamin（硅基流动）" },
+    { value: `${cosyVoice}:charles`, label: "磁性男声 · Charles（硅基流动）" },
+    { value: `${cosyVoice}:david`, label: "欢快男声 · David（硅基流动）" },
+    { value: `${cosyVoice}:anna`, label: "沉稳女声 · Anna（硅基流动）" },
+    { value: `${cosyVoice}:bella`, label: "激情女声 · Bella（硅基流动）" },
+    { value: `${cosyVoice}:claire`, label: "温柔女声 · Claire（硅基流动）" },
+    { value: `${cosyVoice}:diana`, label: "欢快女声 · Diana（硅基流动）" },
+];
+
 export const audioVoiceOptions = [
+    ...cosyVoiceOptions,
     { value: "alloy", label: "Alloy" },
     { value: "ash", label: "Ash" },
     { value: "ballad", label: "Ballad" },
@@ -24,7 +39,9 @@ export const audioFormatOptions = [
 ];
 
 export function normalizeAudioVoiceValue(value: string) {
-    return audioVoiceOptions.some((item) => item.value === value) ? value : "alloy";
+    const voice = value.trim();
+    if (!voice) return audioVoiceOptions[0].value;
+    return voice;
 }
 
 export function normalizeAudioFormatValue(value: string) {

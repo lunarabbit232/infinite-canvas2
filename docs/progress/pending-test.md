@@ -34,3 +34,17 @@ description: 当前版本已实现但仍需人工验证的变更项
 - [ ] **全景场景生成**：`POST /api/v1/scenes/generate-panorama` — 输入场景描述+画风+角度数 → 返回 8 个方向的全景 prompt。
 - [ ] **人物漂移抑制剂 - 角色锚定注入**：画布生成请求携带 `characterIds` 字段 → 后端在转发 AI 请求前自动从角色库读取 promptTemplate 拼接锚定文本，注入到请求的 prompt 字段；参考图 URL 收集后一并注入。视频/图片生成 API 请求携带 `X-Character-IDs` header → 后端同样注入角色锚定。
 - [ ] **角色链师徒系统**：`POST /api/v1/roles/mentor` 设导师 → `GET /api/v1/roles/chain` 查导师 → `GET /api/v1/roles/mentees` 查学员 → 个人知识库 CRUD 带 visibility 控制。Agent 调用时沿 mentor 链收集知识。
+
+- [ ] **语音合成（TTS）接入硅基流动 CosyVoice2**：渠道 `siliconflow` 新增模型 `FunAudioLLM/CosyVoice2-0.5B`，走已有的 OpenAI 兼容代理 `POST /api/v1/audio/speech`（画布音频节点、音色/格式/语速弹窗均已存在）。音色选项新增 8 个中文预置音色（alex/benjamin/charles/david 男声，anna/bella/claire/diana 女声），写法为 `FunAudioLLM/CosyVoice2-0.5B:<音色名>`。`normalizeAudioVoiceValue` 由白名单强制回落改为「非空即放行」，以支持带模型前缀的音色与自定义克隆音色（`speech:xxx` uri）。默认音频模型/音色改为 CosyVoice2（前端 `defaultConfig`；后端 `model/setting.go` 无 `DefaultAudioModel` 字段，音频模型由前端 `filterModelsByCapability` 从 `availableModels` 自动筛选，已验证只筛出 CosyVoice2）。
+      ✅ **已端到端验证出声**：`SiliconFlow` 渠道 Key 已配置，实测 `POST /api/v1/audio/speech` 返回 `audio/mpeg`，ffprobe 确认为真实 mp3（24kHz 单声道）——女声 claire 8.09 秒 / 男声 alex + `<|endofprompt|>` 情感控制 3.22 秒，样例见 `data/videos/tts-test-*.mp3`。待人工验证项：画布音频节点与视频页 TTSPanel 的前端交互、音频节点入画布后的播放。
+      计费：按输入文本 UTF-8 字节数计费（测试文本 90 字节）。
+      注：`/audio/speech` 成功调用**不写入 `ai_call_logs`**，管理后台「AI 调用日志」查不到音频记录，属既有行为。
+
+- [ ] **旧 Edge TTS 入口改接 CosyVoice2（零新依赖）**：视频页旁白面板 `TTSPanel` 与声线库 `/voices` 原先调用已失效的 `/api/v1/tts/*`（微软端点下线，恒 404），现统一改走已通的 `/audio/speech`。
+      · `services/api/tts.ts` 重写：`fetchTTSVoices`（异步请求后端）→ `listTTSVoices()`（同步返回本地 8 个中文音色）；`synthesizeTTS` 改打 `/audio/speech` 并返回 `Blob`（不再直接强制下载）；新增 `ttsVoiceShortName`；model 由 voice 的 `模型名:音色名` 前缀自动推导。
+      · `TTSPanel`：默认音色改 CosyVoice2 首项，生成后**新增试听播放器 + 下载按钮**（原先只闷头下载文件）。
+      · `/voices` 页：每个音色卡片**新增「试听」按钮**（可编辑试听文本，即时合成播放），音色 ID 只显示短名。
+      · `lib/audio-generation.ts` 抽出 `cosyVoiceOptions` 供两处复用，`audioVoiceOptions` 展开复用它。
+      · 后端 `service/tts.go`、`handler/tts.go`、`/tts/*` 路由**一律未动**（保留待日后修 WebSocket 版，见 todo）。
+      ✅ 已验证：tsc 退出码 0；`/voices` 与 `/video` 均 200，8 个中文音色全部出现在页面，旧声线「晓晓 / XiaoxiaoNeural」已彻底清除；模拟前端请求实测 alex 4.13 秒、diana 5.09 秒真实 mp3（样例 `data/videos/voices-try-*.mp3`）。
+      待人工验证：浏览器里点「试听」「生成配音」的实际播放与下载体验。
