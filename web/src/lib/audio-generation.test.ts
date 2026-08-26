@@ -7,6 +7,8 @@ import {
   audioFormatLabel,
   audioSpeedLabel,
   audioMimeType,
+  audioVoiceOptions,
+  cosyVoiceOptions,
 } from "./audio-generation"
 
 describe("normalizeAudioVoiceValue", () => {
@@ -16,12 +18,46 @@ describe("normalizeAudioVoiceValue", () => {
     expect(normalizeAudioVoiceValue("cedar")).toBe("cedar")
   })
 
-  it("returns alloy for unknown voice", () => {
-    expect(normalizeAudioVoiceValue("unknown")).toBe("alloy")
+  // 音色取值不再走白名单：渠道各家音色命名不同（如硅基流动要求
+  // "模型名:音色名"，克隆音色为 speech:xxx uri），白名单会把它们静默
+  // 改写成 alloy 导致上游报错，故改为非空即放行。
+  it("passes through voice names with model prefix", () => {
+    expect(normalizeAudioVoiceValue("FunAudioLLM/CosyVoice2-0.5B:alex")).toBe(
+      "FunAudioLLM/CosyVoice2-0.5B:alex",
+    )
   })
 
-  it("returns alloy for empty string", () => {
-    expect(normalizeAudioVoiceValue("")).toBe("alloy")
+  it("passes through custom cloned voice uri", () => {
+    expect(normalizeAudioVoiceValue("speech:my-voice:abc:def")).toBe("speech:my-voice:abc:def")
+  })
+
+  it("passes through unknown voice instead of rewriting it", () => {
+    expect(normalizeAudioVoiceValue("unknown")).toBe("unknown")
+  })
+
+  it("trims surrounding whitespace", () => {
+    expect(normalizeAudioVoiceValue("  nova  ")).toBe("nova")
+  })
+
+  it("falls back to the first option for empty input", () => {
+    expect(normalizeAudioVoiceValue("")).toBe(audioVoiceOptions[0].value)
+    expect(normalizeAudioVoiceValue("   ")).toBe(audioVoiceOptions[0].value)
+  })
+})
+
+describe("cosyVoiceOptions", () => {
+  it("exposes the 8 preset Chinese voices", () => {
+    expect(cosyVoiceOptions).toHaveLength(8)
+  })
+
+  it("prefixes every value with the model name", () => {
+    for (const item of cosyVoiceOptions) {
+      expect(item.value.startsWith("FunAudioLLM/CosyVoice2-0.5B:")).toBe(true)
+    }
+  })
+
+  it("is included at the head of audioVoiceOptions", () => {
+    expect(audioVoiceOptions.slice(0, 8)).toEqual(cosyVoiceOptions)
   })
 })
 
@@ -72,8 +108,15 @@ describe("audioVoiceLabel", () => {
     expect(audioVoiceLabel("onyx")).toBe("Onyx")
   })
 
-  it("falls back to alloy label for invalid", () => {
-    expect(audioVoiceLabel("bad")).toBe("Alloy")
+  it("returns the Chinese label for preset CosyVoice voices", () => {
+    expect(audioVoiceLabel("FunAudioLLM/CosyVoice2-0.5B:claire")).toContain("温柔女声")
+  })
+
+  // 音色已不再走白名单，未收录的取值（自定义/克隆音色）原样作为标签展示，
+  // 而非伪装成 Alloy。
+  it("shows the raw value when no label is registered", () => {
+    expect(audioVoiceLabel("bad")).toBe("bad")
+    expect(audioVoiceLabel("speech:my-voice:abc:def")).toBe("speech:my-voice:abc:def")
   })
 })
 
